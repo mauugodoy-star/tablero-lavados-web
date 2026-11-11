@@ -80,7 +80,8 @@ var SHIM=function(){
   function vedado(){return Promise.reject(Object.assign(new Error("Solo consulta"),{code:"permission-denied"}));}
   var db={collection:col,
     doc:function(p){return{
-      onSnapshot:function(cb){setTimeout(function(){cb({exists:p==="config/capacidades"&&!!W.cfg,data:function(){return p==="config/capacidades"?W.cfg:{}}})},0);return function(){};},
+      onSnapshot:function(cb){var d=p==="config/capacidades"?W.cfg:p==="config/medios"?{m:{}}:null;setTimeout(function(){cb({exists:!!d,data:function(){return d||{}}})},0);return function(){};},
+      get:function(){var d=p==="config/capacidades"?W.cfg:null;return Promise.resolve({exists:!!d,data:function(){return d||{}}});},
       set:vedado,update:vedado,delete:vedado};},
     batch:function(){return{set:function(){},update:function(){},delete:function(){},commit:vedado};}};
   var dl={save:function(o){var b=new Blob([o.data]),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=o.filename;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},2000);return Promise.resolve();}};
@@ -94,7 +95,11 @@ function abrir(B){
   window.__W=B;
   var gen=B.gen?new Date(B.gen).toLocaleString("es-MX",{dateStyle:"short",timeStyle:"short"}):"";
   var pie='<div id="__sal" style="position:fixed;left:10px;bottom:10px;z-index:99999;display:flex;gap:8px;align-items:center;font:12px system-ui,sans-serif;background:rgba(20,33,61,.88);color:#fff;padding:6px 10px;border-radius:999px">'+(gen?'<span>Datos al '+gen+'</span>':'')+'<button onclick="location.reload()" style="all:unset;cursor:pointer;font-weight:700;text-decoration:underline">Salir</button></div>';
-  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Tablero de Lavados</title></head><body><script>('+SHIM.toString()+')();<\/script>'+B.html+pie+'</body></html>';
+  var shim='<script>('+SHIM.toString()+')();<\/script><meta name="robots" content="noindex,nofollow">';
+  var html,src=B.html;
+  if(/<head[^>]*>/i.test(src)){html=src.replace(/<head[^>]*>/i,function(m){return m+shim;});
+    html=/<\/body>/i.test(html)?html.replace(/<\/body>(?![\s\S]*<\/body>)/i,pie+'</body>'):html+pie;}
+  else html='<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tablero de Lavados</title>'+shim+'</head><body>'+src+pie+'</body></html>';
   document.open();document.write(html);document.close();
 }
 $("f").addEventListener("submit",async function(ev){
