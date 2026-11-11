@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Tablero de Lavados · Acceso</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--tx:#14213d;--mut:#5b6678;--ln:#d9dfe9;--ac:#0d2b6e;--acx:#fff;--bad:#b3261e;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1520;--card:#18212f;--tx:#e8edf6;--mut:#9aa6b8;--ln:#2a3548;--ac:#5b9bff;--acx:#0b1220;--bad:#ff8a80;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.box{width:100%;max-width:380px;background:var(--card);border:1px solid var(--ln);border-radius:16px;padding:28px 24px;box-shadow:0 6px 24px rgba(0,0,0,.08);border-top:4px solid #d7192d}
+h1{font-size:21px;margin:0 0 4px}
+p.s{margin:0 0 20px;color:var(--mut);font-size:14px}
+label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
+input[type=text],input[type=password]{width:100%;padding:12px;font-size:16px;border:1px solid var(--ln);border-radius:10px;background:transparent;color:var(--tx)}
+input:focus{outline:2px solid var(--ac);outline-offset:1px}
+.chk{display:flex;align-items:center;gap:8px;margin:14px 0 0;font-size:14px;color:var(--mut)}
+.chk input{width:18px;height:18px}
+button{width:100%;margin-top:18px;padding:13px;font-size:16px;font-weight:600;border:0;border-radius:10px;background:var(--ac);color:var(--acx);cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}
+#err{min-height:20px;margin-top:12px;font-size:14px;color:var(--bad)}
+.pie{margin-top:14px;font-size:12px;color:var(--mut);text-align:center}
+</style>
+</head>
+<body>
+<form class="box" id="f" autocomplete="on">
+  <h1>Tablero de Lavados</h1>
+  <p class="s">Acceso restringido. Ingresa con tu usuario y contraseña.</p>
+  <label for="u">Usuario</label>
+  <input id="u" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+  <label for="p">Contraseña</label>
+  <input id="p" name="password" type="password" autocomplete="current-password" required>
+  <label class="chk"><input id="r" type="checkbox"> Recordar usuario</label>
+  <button id="b" type="submit">Ingresar</button>
+  <div id="err" role="alert"></div>
+  <div class="pie">Solo consulta · los datos viajan cifrados</div>
+</form>
+<script>
+(function(){
+"use strict";
+var $=function(i){return document.getElementById(i)};
+var enc=new TextEncoder(),dec=new TextDecoder();
+function b64(s){var a=atob(s),u=new Uint8Array(a.length);for(var i=0;i<a.length;i++)u[i]=a.charCodeAt(i);return u;}
+function hex(buf){return Array.prototype.map.call(new Uint8Array(buf),function(x){return("0"+x.toString(16)).slice(-2)}).join("");}
+try{var ru=localStorage.getItem("tl_user");if(ru){$("u").value=ru;$("r").checked=true;$("p").focus();}}catch(e){}
+function falla(m){$("err").textContent=m;$("b").disabled=false;$("b").textContent="Ingresar";}
+async function entrar(user,pass){
+  var u=user.trim().toLowerCase().normalize("NFC");
+  var acc=await (await fetch("acceso.json?"+Date.now(),{cache:"no-store"})).json();
+  var id=hex(await crypto.subtle.digest("SHA-256",enc.encode("u:"+u))).slice(0,16);
+  var me=acc.users.filter(function(x){return x.id===id})[0];
+  if(!me)throw new Error("bad");
+  var km=await crypto.subtle.importKey("raw",enc.encode(pass.normalize("NFC")),"PBKDF2",false,["deriveKey"]);
+  var wk=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(me.salt),iterations:acc.iter,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["decrypt"]);
+  var raw;
+  try{raw=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(me.iv)},wk,b64(me.ct));}catch(e){throw new Error("bad");}
+  var mk=await crypto.subtle.importKey("raw",raw,"AES-GCM",false,["decrypt"]);
+  var d=await (await fetch("data.enc.json?"+Date.now(),{cache:"no-store"})).json();
+  var gz=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(d.iv)},mk,b64(d.ct));
+  var txt=await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  return JSON.parse(txt);
+}
+var SHIM=function(){
+  var W=window.__W;
+  function snapDocs(a){return{docs:a.map(function(d){return{id:d.id,exists:true,data:function(){return d.data}}})}}
+  function col(name){
+    var yr=null;
+    var o={where:function(f,op,v){if(f==="anio")yr=v;return o;},
+      onSnapshot:function(cb){
+        var a=[];
+        if(name==="lavados")a=W.docs.filter(function(d){return yr==null||d.data.anio===yr});
+        else if(name==="equipos")a=W.eq;
+        setTimeout(function(){cb(snapDocs(a))},0);
+        return function(){};
+      }};
+    return o;
+  }
+  function vedado(){return Promise.reject(Object.assign(new Error("Solo consulta"),{code:"permission-denied"}));}
+  var db={collection:col,
+    doc:function(p){return{
+      onSnapshot:function(cb){setTimeout(function(){cb({exists:p==="config/capacidades"&&!!W.cfg,data:function(){return p==="config/capacidades"?W.cfg:{}}})},0);return function(){};},
+      set:vedado,update:vedado,delete:vedado};},
+    batch:function(){return{set:function(){},update:function(){},delete:function(){},commit:vedado};}};
+  var dl={save:function(o){var b=new Blob([o.data]),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=o.filename;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},2000);return Promise.resolve();}};
+  window.claude={use:function(n){
+    if(n==="db")return Promise.resolve(db);
+    if(n==="user")return Promise.resolve({id:function(){return Promise.resolve("web")},canEdit:function(){return Promise.resolve(false)},can:function(){return Promise.resolve(false)}});
+    if(n==="downloads")return Promise.resolve(dl);
+    return Promise.resolve(null);}};
+};
+function abrir(B){
+  window.__W=B;
+  var gen=B.gen?new Date(B.gen).toLocaleString("es-MX",{dateStyle:"short",timeStyle:"short"}):"";
+  var pie='<div id="__sal" style="position:fixed;left:10px;bottom:10px;z-index:99999;display:flex;gap:8px;align-items:center;font:12px system-ui,sans-serif;background:rgba(20,33,61,.88);color:#fff;padding:6px 10px;border-radius:999px">'+(gen?'<span>Datos al '+gen+'</span>':'')+'<button onclick="location.reload()" style="all:unset;cursor:pointer;font-weight:700;text-decoration:underline">Salir</button></div>';
+  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Tablero de Lavados</title></head><body><script>('+SHIM.toString()+')();<\/script>'+B.html+pie+'</body></html>';
+  document.open();document.write(html);document.close();
+}
+$("f").addEventListener("submit",async function(ev){
+  ev.preventDefault();$("err").textContent="";
+  $("b").disabled=true;$("b").textContent="Verificando…";
+  var user=$("u").value,pass=$("p").value;
+  try{
+    var B=await entrar(user,pass);
+    try{if($("r").checked)localStorage.setItem("tl_user",user.trim());else localStorage.removeItem("tl_user");}catch(e){}
+    $("b").textContent="Abriendo tablero…";
+    abrir(B);
+  }catch(e){
+    falla(e&&e.message==="bad"?"Usuario o contraseña incorrectos.":"No se pudo abrir el tablero. Revisa tu conexión e inténtalo de nuevo.");
+    $("p").value="";$("p").focus();
+  }
+});
+})();
+</script>
+</body>
+</html>
