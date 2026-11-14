@@ -1,0 +1,11 @@
+{
+ "iter": 600000,
+ "users": [
+  {
+   "id": "d72b0bb26d00f6cf",
+   "salt": "qqydf/bewF+fOCx2OjV/3w==",
+   "iv": "p0o8WaZR4argKqH9",
+   "ct": "tKRCJngpc0ycOuNCjyG+UakH07bF9EbaNQy8mBNUvDMYc1iPPUrhc71VY7wiJ6Ra"
+  }
+ ]
+}

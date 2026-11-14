@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b1f44">
+<title>Carrocería 360</title>
+<style>
+:root{--marca:#0e1a2b;--pri:#1f66c1;--pri-osc:#184f95;--tinta:#101828;--tinta-2:#475467;--borde-f:#c5cedb;--crit:#c02b2b;--crit-s:#fbe4e4;color-scheme:light}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:#fff;color:var(--tinta);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.acceso{min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr}
+.lado{background:linear-gradient(160deg,#0e1a2b 0%,#18304f 100%);color:#fff;padding:56px;display:flex;flex-direction:column;justify-content:space-between;gap:32px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.sello{width:32px;height:32px;border-radius:8px;background:#f08a24;color:#1b1203;display:grid;place-items:center;font-weight:800;font-size:12px;flex:none}
+.logo small{display:block;font-weight:500;font-size:10.5px;color:#8fa0b8;letter-spacing:.08em;text-transform:uppercase}
+.lado h1{font-size:38px;line-height:1.1;margin:0;letter-spacing:-.01em}.lado p{color:#b9c6d8;max-width:440px;font-size:16px;margin:12px 0 0}
+.lado .pie{font-size:12px;color:#8fa0b8}
+.caja{display:grid;place-items:center;padding:32px}
+form{width:min(380px,100%);display:flex;flex-direction:column;gap:14px}
+form h1{font-size:22px;margin:0;letter-spacing:-.01em}form .sub{color:var(--tinta-2);margin:4px 0 0}
+label.campo{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--tinta-2)}
+input[type=text],input[type=password]{width:100%;padding:8px 10px;border:1px solid var(--borde-f);border-radius:8px;background:#fff;min-height:40px;font:inherit;color:var(--tinta)}
+input:focus,button:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
+.chk{display:flex;align-items:center;gap:8px;color:var(--tinta-2);font-size:13.5px}
+button{display:inline-flex;align-items:center;justify-content:center;padding:11px;border-radius:8px;border:1px solid var(--pri);background:var(--pri);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button:hover{background:var(--pri-osc)}button:disabled{opacity:.6;cursor:wait}
+#err{padding:10px 14px;border-radius:8px;background:var(--crit-s);color:#8f1d1d;border:1px solid #f0b4b4}#err:empty{display:none}
+.nota{font-size:12px;color:var(--tinta-2)}
+@media (max-width:860px){.acceso{grid-template-columns:1fr}.lado{display:none}}
+</style>
+</head>
+<body>
+<div class="acceso">
+  <div class="lado">
+    <div class="logo"><span class="sello">360</span><span>CARROCERÍA 360<small>Gestión nacional de flotilla</small></span></div>
+    <div><h1>Toda la carrocería de la flotilla, en un solo lugar.</h1>
+      <p>Reportes de daños, órdenes de trabajo, preventivos, inspecciones y unidades inmovilizadas de todas las sucursales.</p></div>
+    <div class="pie">Cajas secas · Tractocamiones · Dollys</div>
+  </div>
+  <div class="caja">
+    <form id="f" autocomplete="on">
+      <div><h1>Iniciar sesión</h1><p class="sub">Ingresa con tu usuario y contraseña de consulta.</p></div>
+      <div id="err" role="alert"></div>
+      <label class="campo" for="u">Usuario<input id="u" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required autofocus></label>
+      <label class="campo" for="p">Contraseña<input id="p" name="password" type="password" autocomplete="current-password" required></label>
+      <label class="chk"><input id="r" type="checkbox"> Recordar mi usuario en este equipo</label>
+      <button id="b" type="submit">Entrar</button>
+      <div class="nota">Sitio de solo consulta, actualizado una vez al día. La captura se hace en claude.ai.</div>
+    </form>
+  </div>
+</div>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var enc=new TextEncoder();
+function b64(s){var a=atob(s),u=new Uint8Array(a.length);for(var i=0;i<a.length;i++)u[i]=a.charCodeAt(i);return u;}
+function hex(buf){return Array.prototype.map.call(new Uint8Array(buf),function(x){return("0"+x.toString(16)).slice(-2)}).join("");}
+try{var ru=localStorage.getItem("c360_user");if(ru){$("u").value=ru;$("r").checked=true;}}catch(e){}
+async function entrar(user,pass){
+  var u=user.trim().toLowerCase().normalize("NFC");
+  var acc=await (await fetch("acceso.json?"+Date.now(),{cache:"no-store"})).json();
+  var id=hex(await crypto.subtle.digest("SHA-256",enc.encode("u:"+u))).slice(0,16);
+  var me=acc.users.filter(function(x){return x.id===id})[0];if(!me)throw new Error("bad");
+  var km=await crypto.subtle.importKey("raw",enc.encode(pass.normalize("NFC")),"PBKDF2",false,["deriveKey"]);
+  var wk=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(me.salt),iterations:acc.iter,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["decrypt"]);
+  var raw;try{raw=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(me.iv)},wk,b64(me.ct));}catch(e){throw new Error("bad");}
+  var mk=await crypto.subtle.importKey("raw",raw,"AES-GCM",false,["decrypt"]);
+  var d=await (await fetch("data.enc.json?"+Date.now(),{cache:"no-store"})).json();
+  var gz=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(d.iv)},mk,b64(d.ct));
+  var txt=await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  return JSON.parse(txt);
+}
+/* Base de datos de solo lectura con la misma forma que la de claude.ai, alimentada con la copia cifrada. */
+var SHIM=function(){
+  var D=window.__C360_DOCS;
+  function snap(p){var d=D[p];return{id:p.split("/").pop(),exists:!!d,data:function(){return d},metadata:{fromCache:false,hasPendingWrites:false}};}
+  function vedado(){return Promise.reject(Object.assign(new Error("Solo consulta"),{code:"not_granted"}));}
+  function q(col,f){return{where:function(a,op,v){return q(col,f.concat([[a,op,v]]))},orderBy:function(){return q(col,f)},limit:function(){return q(col,f)},
+    get:function(){return Promise.resolve(qs(col,f))},onSnapshot:function(cb){setTimeout(function(){cb(qs(col,f))},0);return function(){}},
+    doc:function(id){return ref(col+"/"+id)},add:vedado};}
+  function qs(col,f){var out=[];Object.keys(D).forEach(function(p){if(p.slice(0,p.lastIndexOf("/"))!==col)return;var d=D[p];
+      if(f.every(function(x){return x[1]==="=="?d[x[0]]===x[2]:true}))out.push(snap(p));});
+    return{docs:out,size:out.length,empty:!out.length,docChanges:function(){return[]},metadata:{fromCache:false,hasPendingWrites:false}};}
+  function ref(p){return{id:p.split("/").pop(),path:p,get:function(){return Promise.resolve(snap(p))},onSnapshot:function(cb){setTimeout(function(){cb(snap(p))},0);return function(){}},
+    set:vedado,update:vedado,delete:vedado,acquire:vedado,collection:function(c){return q(p+"/"+c,[])}};}
+  var db={doc:ref,collection:function(c){return q(c,[])}};
+  var user={id:function(){return Promise.resolve("web")},canEdit:function(){return Promise.resolve(false)},isOwner:function(){return Promise.resolve(false)},can:function(){return Promise.resolve(false)},
+    me:function(){return Promise.resolve({id:"web",name:"",avatarUrl:""})},profiles:function(ids){var o={};[].concat(ids).forEach(function(i){o[i]={id:i,name:""}});return Promise.resolve(o)},search:function(){return Promise.resolve([])}};
+  var dl={save:function(o){var b=new Blob([o.data],{type:"text/csv"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=o.filename;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},2000);return Promise.resolve({saved:true});}};
+  window.claude={use:function(n){return Promise.resolve(n==="db"?db:n==="user"?user:n==="downloads"?dl:null)}};
+};
+function abrir(B){
+  window.__C360_DOCS=B.docs;
+  var gen=B.gen?new Date(B.gen).toLocaleString("es-MX",{dateStyle:"medium",timeStyle:"short"}):"";
+  var pre='<script>window.__C360_WEB=true;window.__C360_GEN='+JSON.stringify(gen)+';<\/script>';
+  var shim='<script>window.__C360_DOCS='+JSON.stringify(B.docs).replace(/</g,"\\u003c")+';('+SHIM.toString()+')();<\/script>';
+  var head='<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow">'+pre+shim+'</head><body>';
+  document.open();document.write(head+B.html+'</body></html>');document.close();
+}
+$("f").addEventListener("submit",async function(ev){
+  ev.preventDefault();$("err").textContent="";$("b").disabled=true;$("b").textContent="Verificando…";
+  var user=$("u").value,pass=$("p").value;
+  try{var B=await entrar(user,pass);try{if($("r").checked)localStorage.setItem("c360_user",user.trim());else localStorage.removeItem("c360_user");}catch(e){}abrir(B);}
+  catch(e){$("err").textContent=e&&e.message==="bad"?"Usuario o contraseña incorrectos.":"No se pudo abrir el sitio. Revisa tu conexión e intenta de nuevo.";$("b").disabled=false;$("b").textContent="Entrar";}
+});
+})();
+</script>
+</body>
+</html>
